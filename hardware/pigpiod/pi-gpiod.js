@@ -1,7 +1,7 @@
 
 module.exports = function(RED) {
     "use strict";
-    var Pigpio = require('js-pigpio');
+    var Pigpio = require('pigpio-client');
 
     var bcm2pin = {
         "2":"3", "3":"5", "4":"7", "14":"8", "15":"10", "17":"11", "18":"12", "27":"13", "22":"15",
@@ -18,6 +18,7 @@ module.exports = function(RED) {
     };
 
     function GPioInNode(n) {
+        console.log("Started input");
         RED.nodes.createNode(this,n);
         this.host = n.host || "127.0.0.1";
         this.port = n.port || 8888;
@@ -26,51 +27,70 @@ module.exports = function(RED) {
         this.intype = n.intype;
         this.read = n.read || false;
         this.debounce = Number(n.debounce || 25);
+
+        var inputTypes = {  "PUD_OFF": 0,
+                            "PUD_DOWN": 1,
+                            "PUD_UP": 2};
         var node = this;
         var PiGPIO;
 
         if (node.pin !== undefined) {
-            PiGPIO = new Pigpio();
-            var inerror = false;
-            var doit = function() {
-                PiGPIO.pi(node.host, node.port, function(err) {
-                    if (err) {
-                        node.status({fill:"red",shape:"ring",text:err.code+" "+node.host+":"+node.port});
-                        if (!inerror) { node.error(err); inerror = true; }
-                        node.retry = setTimeout(function() { doit(); }, 5000);
-                    }
-                    else {
+            try{
+                PiGPIO = new Pigpio.pigpio({host: this.host, post: this.port, timeout: null} );
+                const ready = new Promise((resolve, reject) => {
+                    PiGPIO.once('connected', resolve);
+                    PiGPIO.once('error', reject);
+                });
+                            
+                var inerror = false;
+                var doit = async function() {
+                    try{
+                        node.pigpioPin = PiGPIO.gpio(Number(node.pin));
                         inerror = false;
-                        PiGPIO.set_mode(node.pin,PiGPIO.INPUT);
-                        PiGPIO.set_pull_up_down(node.pin,PiGPIO[node.intype]);
-                        PiGPIO.set_glitch_filter(node.pin,node.debounce);
+                        await node.pigpioPin.modeSet('input');
+                        await node.pigpioPin.pullUpDown(inputTypes[node.intype]);
+                        await node.pigpioPin.glitchSet(node.debounce);
+                        
                         node.status({fill:"green",shape:"dot",text:"node-red:common.status.ok"});
-                        node.cb = PiGPIO.callback(node.pin, PiGPIO.EITHER_EDGE, function(gpio, level, tick) {
-                            node.send({ topic:"pi/"+node.pio, payload:Number(level) });
+                        node.pigpioPin.notify(function(level, tick) {
+                            node.send({ topic:"pi/" + node.pio, payload:Number(level) });
                             node.status({fill:"green",shape:"dot",text:level});
                         });
                         if (node.read) {
                             setTimeout(function() {
-                                PiGPIO.read(node.pin, function(err, level) {
+                                node.pigpioPin.read(function(err, level) {
                                     node.send({ topic:"pi/"+node.pio, payload:Number(level) });
                                     node.status({fill:"green",shape:"dot",text:level});
                                 });
                             }, 20);
                         }
                     }
-                });
+                    catch (error) {
+                        node.status({fill:"red", shape:"ring", text:error + " " + node.host + ":" + node.port});
+                        if (!inerror) { node.error(error); inerror = true; }
+                        node.retry = setTimeout(function() { doit(); }, 5000);
+                        
+                    }
+                }
+                ready.then(doit);
             }
-            doit();
+            catch (error) { // from creating PIGPIO 
+                node.status({fill:"red", shape:"ring", text:error + " " + node.host + ":" + node.port});
+                if (!inerror) { node.error(error); inerror = true; }
+                node.retry = setTimeout(function() { doit(); }, 5000);
+            }
         }
         else {
-            node.warn(RED._("pi-gpiod:errors.invalidpin")+": "+node.pio);
+            node.warn(RED._("pi-gpiod:errors.invalidpin") + ": " + node.pio);
         }
 
         node.on("close", function(done) {
             if (node.retry) { clearTimeout(node.retry); }
             node.status({fill:"grey",shape:"ring",text:"pi-gpiod.status.closed"});
-            node.cb.cancel();
-            PiGPIO.close();
+            if(node.pigpioPin){
+                node.pigpioPin.endNotify();
+            }
+            PiGPIO.end();
             done();
         });
     }
@@ -79,6 +99,7 @@ module.exports = function(RED) {
 
     function GPioOutNode(n) {
         RED.nodes.createNode(this,n);
+        return;
         this.host = n.host || "127.0.0.1";
         this.port = n.port || 8888;
         this.pin = n.pin;
@@ -96,6 +117,7 @@ module.exports = function(RED) {
         if (this.sermin < 5) { this.sermin = 5; }
         if (this.sermax > 25) { this.sermax = 25; }
         var node = this;
+        console.log("host is " + n.host);
         var PiGPIO;
 
         function inputlistener(msg) {
@@ -137,7 +159,7 @@ module.exports = function(RED) {
         }
 
         if (node.pin !== undefined) {
-            PiGPIO = new Pigpio();
+            PiGPIO = new Pigpio({host: this.host, post: this.port, timeout: null} );
             var inerror = false;
             var doit = function() {
                 PiGPIO.pi(node.host, node.port, function(err) {
@@ -178,3 +200,4 @@ module.exports = function(RED) {
     }
     RED.nodes.registerType("pi-gpiod out",GPioOutNode);
 }
+
