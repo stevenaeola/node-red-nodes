@@ -10,6 +10,7 @@
             "initpin": "Initialise pin state?",
             "debounce": "Debounce",
             "limits": "Limits",
+            "pwmfreq": "PWM frequency",
             "min": "min",
             "max": "max"
         },
@@ -24,6 +25,7 @@
         },
         "digout": "Digital output",
         "pwmout": "PWM output",
+        "hwpwmout": "Hardware PWM output (pins 12, 13, 18, 19 only)",
         "servo": "Servo output",
         "initpin0": "initial level of pin - low (0)",
         "initpin1": "initial level of pin - high (1)",
@@ -33,6 +35,7 @@
             "in": "Only Digital Input is supported - input must be 0 or 1.",
             "dig": "Digital output - input must be 0 or 1.",
             "pwm": "PWM output - input must be between 0 to 100.",
+            "hwpwm": "Hardware PWM output - input must be between 0 to 100.",
             "ser": "Servo output - input must be between 0 to 100. 50 is centre.<br/>Min must be 500uS or more, Max must be 2500uS or less."
         },
         "types": {

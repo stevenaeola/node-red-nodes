@@ -107,6 +107,7 @@ module.exports = function(RED) {
         this.out = n.out || "out";
         this.sermin = Number(n.sermin)/100;
         this.sermax = Number(n.sermax)/100;
+        this.pwmfreq = parseInt(n.pwmfreq || 10000);
         if (this.sermin > this.sermax) {
             var tmp = this.sermin;
             this.sermin = this.sermax;
@@ -142,6 +143,10 @@ module.exports = function(RED) {
                         if (node.out === "pwm") {
                             node.pigpioPin.analogWrite(parseInt(out * 2.55));
                         }
+                        if (node.out === "hwpwm") {
+                            node.pigpioPin.hardwarePWM(node.pwmfreq, parseInt(out * 10000));
+                        }
+
                         if (node.out === "ser") {
                             var r = (node.sermax - node.sermin) * 100;
                             node.pigpioPin.setServoPulsewidth(parseInt(1500 - (r/2) + (out * r / 100)));

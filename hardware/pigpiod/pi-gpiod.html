@@ -378,14 +378,19 @@
         <select id="node-input-out" style="width: 250px;">
             <option value="out" data-i18n="pi-gpiod.digout"></option>
             <option value="pwm" data-i18n="pi-gpiod.pwmout"></option>
+            <option value="hwpwm" data-i18n="pi-gpiod.hwpwmout"></option>
             <option value="ser" data-i18n="pi-gpiod.servo"></option>
         </select>
     </div>
     <div class="form-row" id="node-set-minimax">
-        <label>&nbsp;&nbsp;&nbsp;&nbsp;<span data-i18n="pi-gpiod.label.limits"></label>
+        <label>&nbsp;&nbsp;&nbsp;&nbsp;<span data-i18n="pi-gpiod.label.limits"></span></label>
         <span data-i18n="pi-gpiod.label.min"></span> <input type="text" id="node-input-sermin" style="width:70px;"> uS
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         <span data-i18n="pi-gpiod.label.max"></span> <input type="text" id="node-input-sermax" style="width:70px;"> uS
+    </div>
+    <div class="form-row" id="node-set-pwmfreq">
+        <label>&nbsp;<span data-i18n="pi-gpiod.label.pwmfreq"></label>
+        <input type="text" id="node-input-pwmfreq" style="display:inline-block; width:auto; vertical-align:top;">
     </div>
     <div class="form-row" id="node-set-tick">
         <label>&nbsp;</label>
@@ -410,6 +415,7 @@
     </div>
     <div class="form-tips" id="dig-tip"><span data-i18n="[html]pi-gpiod.tip.dig"></span></div>
     <div class="form-tips" id="pwm-tip"><span data-i18n="[html]pi-gpiod.tip.pwm"></span></div>
+    <div class="form-tips" id="hmpwm-tip"><span data-i18n="[html]pi-gpiod.tip.hwpwm"></span></div>
     <div class="form-tips" id="ser-tip"><span data-i18n="[html]pi-gpiod.tip.ser"></span></div>
     <div class="form-tips" id="pin-tip">Pins marked in blue are dual use. Make sure they are not enabled for
     their other use before using as GPIO.</div>
@@ -433,98 +439,116 @@
 </script>
 
 <script type="text/javascript">
-    var bcm2pin = {
-        "2":"3", "3":"5", "4":"7", "14":"8", "15":"10", "17":"11", "18":"12", "27":"13", "22":"15",
-        "23":"16", "24":"18", "10":"19", "9":"21", "25":"22", "11":"23", "8":"24", "7":"26",
-        "5":"29", "6":"31", "12":"32", "13":"33", "19":"35", "16":"36", "26":"37", "20":"38", "21":"40"
-    };
-    RED.nodes.registerType('pi-gpiod out',{
-        category: 'Raspberry Pi',
-        color:"#c6dbef",
-        defaults: {
-            name: { value:"" },
-            host: { value:"localhost" },
-            port: { value:8888 },
-            pin: { value:"", required:true, validate:RED.validators.number() },
-            set: { value:"" },
-            level: { value:"0" },
-            out: { value:"out" },
-            sermin: { value:"1000" },
-            sermax: { value:"2000" }
-        },
-        inputs:1,
-        outputs:0,
-        icon: "rpi.png",
-        align: "right",
-        label: function() {
-            if (this.out === "pwm") { return this.name || "PWM: "+bcm2pin[this.pin]; }
-            else if (this.out === "ser") { return this.name || "Servo: "+bcm2pin[this.pin]; }
-            else {
-                var suf = "";
-                if (this.set === true) { suf = (this.level === "1") ? "¹ " : "₀ "; }
-                return this.name || "PIN: " + bcm2pin[this.pin] + suf ;
-            }
-        },
-        labelStyle: function() {
-            return this.name?"node_label_italic":"";
-        },
-        inputLabels: function() { return "GPIO"+this.pin; },
-        paletteLabel: "pi gpiod",
-        oneditprepare: function() {
-            var pinnow = bcm2pin[this.pin];
-            var pintip = this._("pi-gpiod.tip.pin");
-            var pinname = this._("pi-gpiod.pinname");
-            if (!$("#node-input-out").val()) { $("#node-input-out").val("out"); }
+ var bcm2pin = {
+     "2":"3", "3":"5", "4":"7", "14":"8", "15":"10", "17":"11", "18":"12", "27":"13", "22":"15",
+     "23":"16", "24":"18", "10":"19", "9":"21", "25":"22", "11":"23", "8":"24", "7":"26",
+     "5":"29", "6":"31", "12":"32", "13":"33", "19":"35", "16":"36", "26":"37", "20":"38", "21":"40"
+ };
+ RED.nodes.registerType('pi-gpiod out',{
+     category: 'Raspberry Pi',
+     color:"#c6dbef",
+     defaults: {
+         name: { value:"" },
+         host: { value:"localhost" },
+         port: { value:8888 },
+         pin: { value:"", required:true, validate:RED.validators.number() },
+         set: { value:"" },
+         level: { value:"0" },
+         out: { value:"out" },
+         sermin: { value:"1000" },
+         sermax: { value:"2000" }
+     },
+     inputs:1,
+     outputs:0,
+     icon: "rpi.png",
+     align: "right",
+     label: function() {
+         if (this.out === "pwm") { return this.name || "PWM: "+bcm2pin[this.pin]; }
+         else if (this.out === "hwpwm") { return this.name || "HW PWM: "+bcm2pin[this.pin]; }
+         else if (this.out === "ser") { return this.name || "Servo: "+bcm2pin[this.pin]; }
+         else {
+             var suf = "";
+             if (this.set === true) { suf = (this.level === "1") ? "¹ " : "₀ "; }
+             return this.name || "PIN: " + bcm2pin[this.pin] + suf ;
+         }
+     },
+     labelStyle: function() {
+         return this.name?"node_label_italic":"";
+     },
+     inputLabels: function() { return "GPIO"+this.pin; },
+     paletteLabel: "pi gpiod",
+     oneditprepare: function() {
+         var pinnow = bcm2pin[this.pin];
+         var pintip = this._("pi-gpiod.tip.pin");
+         var pinname = this._("pi-gpiod.pinname");
+         if (!$("#node-input-out").val()) { $("#node-input-out").val("out"); }
 
-            var hidestate = function () {
-                if ($("#node-input-out").val() === "pwm") {
-                    $('#node-set-tick').hide();
-                    $('#node-set-state').hide();
-                    $('#node-set-minimax').hide();
-                    $('#node-input-set').prop('checked', false);
-                    $("#dig-tip").hide();
-                    $("#pwm-tip").show();
-                    $("#ser-tip").hide();
-                }
-                else if ($("#node-input-out").val() === "ser") {
-                    $('#node-set-tick').hide();
-                    $('#node-set-state').hide();
-                    $('#node-set-minimax').show();
-                    $('#node-input-set').prop('checked', false);
-                    $("#dig-tip").hide();
-                    $("#pwm-tip").hide();
-                    $("#ser-tip").show();
-                }
-                else {
-                    $('#node-set-tick').show();
-                    $('#node-set-minimax').hide();
-                    $("#dig-tip").show();
-                    $("#pwm-tip").hide();
-                    $("#ser-tip").hide();
-                }
-            };
-            $("#node-input-out").change(function () { hidestate(); });
-            hidestate();
+         var hidestate = function () {
+             if ($("#node-input-out").val() === "pwm") {
+                 $('#node-set-tick').hide();
+                 $('#node-set-state').hide();
+                 $('#node-set-minimax').hide();
+                 $('#node-set-pwmfreq').hide();
+                 $('#node-input-set').prop('checked', false);
+                 $("#dig-tip").hide();
+                 $("#pwm-tip").show();
+                 $("#hwpwm-tip").hide();
+                 $("#ser-tip").hide();
+             }
+             else if ($("#node-input-out").val() === "hwpwm") {
+                 $('#node-set-tick').hide();
+                 $('#node-set-state').hide();
+                 $('#node-set-minimax').hide();
+                 $('#node-set-pwmfreq').show();
+                 $('#node-input-set').prop('checked', false);
+                 $("#dig-tip").hide();
+                 $("#pwm-tip").hide();
+                 $("#hwpwm-tip").show();
+                 $("#ser-tip").hide();
+             }
+             else if ($("#node-input-out").val() === "ser") {
+                 $('#node-set-tick').hide();
+                 $('#node-set-state').hide();
+                 $('#node-set-minimax').show();
+                 $('#node-set-pwmfreq').hide();
+                 $('#node-input-set').prop('checked', false);
+                 $("#dig-tip").hide();
+                 $("#pwm-tip").hide();
+                 $("#hwpwm-tip").hide();
+                 $("#ser-tip").show();
+             }
+             else {
+                 $('#node-set-tick').show();
+                 $('#node-set-pwmfreq').hide();
+                 $('#node-set-minimax').hide();
+                 $("#dig-tip").show();
+                 $("#pwm-tip").hide();
+                 $("#hwpwm-tip").hide();
+                 $("#ser-tip").hide();
+             }
+         };
+         $("#node-input-out").change(function () { hidestate(); });
+         hidestate();
 
-            var setstate = function () {
-                if ($('#node-input-set').is(":checked")) {
-                    $("#node-set-state").show();
-                } else {
-                    $("#node-set-state").hide();
-                }
-            };
-            $("#node-input-set").change(function () { setstate(); });
-            setstate();
+         var setstate = function () {
+             if ($('#node-input-set').is(":checked")) {
+                 $("#node-set-state").show();
+             } else {
+                 $("#node-set-state").hide();
+             }
+         };
+         $("#node-input-set").change(function () { setstate(); });
+         setstate();
 
-            $('#pinform input').on('change', function() {
-                this.pin = $("#pinform input[type='radio']:checked").val();
-                $("#node-input-pin").val(this.pin);
-            });
-            $("#node-input-pin").change(function () {
-                if ($("#node-input-pin").val()) {
-                    $("#pinform input[value="+$("#node-input-pin").val()+"]").prop('checked', true);
-                }
-            });
-        }
-    });
+         $('#pinform input').on('change', function() {
+             this.pin = $("#pinform input[type='radio']:checked").val();
+             $("#node-input-pin").val(this.pin);
+         });
+         $("#node-input-pin").change(function () {
+             if ($("#node-input-pin").val()) {
+                 $("#pinform input[value="+$("#node-input-pin").val()+"]").prop('checked', true);
+             }
+         });
+     }
+ });
 </script>
